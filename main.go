@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	VERSION = `0.1.3`
+	VERSION = `0.2.0`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -47,7 +47,7 @@ var (
 	cntErrors   = expvar.NewInt("_errors")
 	chSnippets  = make(chan *Snippet, BUF_SIZE)
 	outBuf      bytes.Buffer
-	outW        io.Writer
+	outW        = io.Writer(&outBuf)
 )
 
 type Snippet struct {
@@ -67,8 +67,7 @@ func (s *Snippet) DebugPrint() {
 }
 
 func (s *Snippet) ESCPrint(w io.Writer) {
-	fmt.Fprintf(w, RESET_PRINTER)
-	fmt.Fprintf(w, `%s%s%s%s
+	fmt.Fprintf(w, `%s%s%s%s%s
 %s--------------------------------
 %s
 --------------------------------
@@ -77,7 +76,7 @@ func (s *Snippet) ESCPrint(w io.Writer) {
 
 
 `,
-		ALIGN_CENTER, SMALL_START, s.Stamp.Format(STAMP_LAYOUT), SMALL_END,
+		RESET_PRINTER, ALIGN_CENTER, SMALL_START, s.Stamp.Format(STAMP_LAYOUT), SMALL_END,
 		ALIGN_LEFT,
 		s.Body,
 		ALIGN_RIGHT, SMALL_START, s.Id, s.Source, SMALL_END,
@@ -109,7 +108,6 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Device path doesn't exist")
 		os.Exit(2)
 	}
-	outW = io.Writer(&outBuf)
 	go runServerPrint()
 	go runServerHTTP()
 	sigwait()
@@ -132,10 +130,6 @@ func runServerPrint() {
 		s.ESCPrint(outW)
 		if _, err := syscall.Write(fd, outBuf.Bytes()); err != nil {
 			log.Printf("Print: [%d] Error writing: %s\n", s.Id, err)
-			cntErrors.Add(1)
-		}
-		if err := syscall.Fsync(fd); err != nil {
-			log.Printf("Print: [%d] Error syncing: %s\n", s.Id, err)
 			cntErrors.Add(1)
 		}
 		if err := syscall.Close(fd); err != nil {
