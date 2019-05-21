@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 )
@@ -117,7 +118,7 @@ func handlePrint(w http.ResponseWriter, req *http.Request) {
 	}
 	snippet := Snippet{
 		Id:     rid,
-		Source: req.RemoteAddr,
+		Source: req.RemoteAddr[:strings.IndexByte(req.RemoteAddr, ':')],
 		Stamp:  time.Now(),
 		Body:   body,
 	}
