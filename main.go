@@ -4,6 +4,7 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"log"
 	"net/http"
@@ -15,7 +16,7 @@ import (
 )
 
 const (
-	VERSION = `0.0.2`
+	VERSION = `0.1.0`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -27,9 +28,19 @@ const (
 	STAMP_LAYOUT    = `2006-01-02 15:04:05 MST`
 )
 
+const (
+	SMALL_START   = "\x1b\x4d\x01"
+	SMALL_END     = "\x1b\x4d\x00"
+	ALIGN_CENTER  = "\x1b\x61\x01"
+	ALIGN_LEFT    = "\x1b\x61\x00"
+	ALIGN_RIGHT   = "\x1b\x61\x02"
+	RESET_PRINTER = "\x1b\x40"
+)
+
 var (
 	flagHost    string
 	flagPort    int
+	devPath     string
 	cntRequests = expvar.NewInt("_requests")
 	cntPrints   = expvar.NewInt("_prints")
 	cntErrors   = expvar.NewInt("_errors")
@@ -52,6 +63,23 @@ func (s *Snippet) DebugPrint() {
 `, s.Stamp.Format(STAMP_LAYOUT), s.Body, s.Id, s.Source)
 }
 
+func (s *Snippet) ESCPrint(w io.Writer) {
+	fmt.Fprintf(w, `%s%s%s%s%s
+%s--------------------------------
+%s
+--------------------------------
+%s%s#%d @ %s%s
+%s
+
+
+`,
+		RESET_PRINTER, ALIGN_CENTER, SMALL_START, s.Stamp.Format(STAMP_LAYOUT), SMALL_END,
+		ALIGN_LEFT,
+		s.Body,
+		ALIGN_RIGHT, SMALL_START, s.Id, s.Source, SMALL_END,
+		ALIGN_LEFT)
+}
+
 func init() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: %s (options...) <device_path>
@@ -72,6 +100,11 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	devPath = flag.Arg(0)
+	if _, err := os.Stat(devPath); os.IsNotExist(err) {
+		fmt.Fprintln(os.Stderr, "Device path doesn't exist")
+		os.Exit(2)
+	}
 	go runServerPrint()
 	go runServerHTTP()
 	sigwait()
@@ -81,8 +114,22 @@ func runServerPrint() {
 	log.Println("Print: Started")
 	for {
 		s := <-chSnippets
+		t0 := time.Now()
 		log.Printf("Print: Snippet [%d] received\n", s.Id)
-		s.DebugPrint()
+		lp, err := os.OpenFile(devPath, os.O_APPEND|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Printf("Print: [%d] Error opening printer: %s\n", s.Id, err)
+			cntErrors.Add(1)
+			return
+		}
+		log.Printf("Print: [%d] Printing...\n", s.Id)
+		s.ESCPrint(lp)
+		if err := lp.Close(); err != nil {
+			log.Fatalf("Print: [%d] Error closing printer: %s\n", s.Id, err)
+		}
+		t1 := time.Now()
+		log.Printf("Print: [%d] Finished in %v\n", s.Id, t1.Sub(t0))
+		cntPrints.Add(1)
 	}
 }
 
@@ -94,6 +141,7 @@ func runServerHTTP() {
 }
 
 func handlePrint(w http.ResponseWriter, req *http.Request) {
+	t0 := time.Now()
 	cntRequests.Add(1)
 	rid := cntRequests.Value()
 	log.Printf("HTTP: Print request [%d] %s @ %s %d\n", rid, req.Method, req.RemoteAddr, req.ContentLength)
@@ -123,15 +171,9 @@ func handlePrint(w http.ResponseWriter, req *http.Request) {
 		Body:   body,
 	}
 	chSnippets <- &snippet
-	log.Printf("HTTP: [%d] Handled\n", rid)
+	t1 := time.Now()
+	log.Printf("HTTP: [%d] Finished in %v\n", rid, t1.Sub(t0))
 	fmt.Fprintf(w, "Queued as snippet %d\n", rid)
-}
-
-func dieOnErr(msg string, err error) {
-	if err != nil {
-		fmt.Fprintln(os.Stderr, msg+":", err)
-		os.Exit(3)
-	}
 }
 
 func sigwait() {
