@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"expvar"
 	"flag"
 	"fmt"
@@ -16,7 +17,7 @@ import (
 )
 
 const (
-	VERSION = `0.1.0`
+	VERSION = `0.1.3`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -45,6 +46,8 @@ var (
 	cntPrints   = expvar.NewInt("_prints")
 	cntErrors   = expvar.NewInt("_errors")
 	chSnippets  = make(chan *Snippet, BUF_SIZE)
+	outBuf      bytes.Buffer
+	outW        io.Writer
 )
 
 type Snippet struct {
@@ -64,7 +67,8 @@ func (s *Snippet) DebugPrint() {
 }
 
 func (s *Snippet) ESCPrint(w io.Writer) {
-	fmt.Fprintf(w, `%s%s%s%s%s
+	fmt.Fprintf(w, RESET_PRINTER)
+	fmt.Fprintf(w, `%s%s%s%s
 %s--------------------------------
 %s
 --------------------------------
@@ -73,7 +77,7 @@ func (s *Snippet) ESCPrint(w io.Writer) {
 
 
 `,
-		RESET_PRINTER, ALIGN_CENTER, SMALL_START, s.Stamp.Format(STAMP_LAYOUT), SMALL_END,
+		ALIGN_CENTER, SMALL_START, s.Stamp.Format(STAMP_LAYOUT), SMALL_END,
 		ALIGN_LEFT,
 		s.Body,
 		ALIGN_RIGHT, SMALL_START, s.Id, s.Source, SMALL_END,
@@ -105,6 +109,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Device path doesn't exist")
 		os.Exit(2)
 	}
+	outW = io.Writer(&outBuf)
 	go runServerPrint()
 	go runServerHTTP()
 	sigwait()
@@ -116,15 +121,24 @@ func runServerPrint() {
 		s := <-chSnippets
 		t0 := time.Now()
 		log.Printf("Print: Snippet [%d] received\n", s.Id)
-		lp, err := os.OpenFile(devPath, os.O_APPEND|os.O_WRONLY, 0644)
+		fd, err := syscall.Open(devPath, os.O_APPEND|os.O_WRONLY, 0222)
 		if err != nil {
 			log.Printf("Print: [%d] Error opening printer: %s\n", s.Id, err)
 			cntErrors.Add(1)
 			return
 		}
 		log.Printf("Print: [%d] Printing...\n", s.Id)
-		s.ESCPrint(lp)
-		if err := lp.Close(); err != nil {
+		outBuf.Reset()
+		s.ESCPrint(outW)
+		if _, err := syscall.Write(fd, outBuf.Bytes()); err != nil {
+			log.Printf("Print: [%d] Error writing: %s\n", s.Id, err)
+			cntErrors.Add(1)
+		}
+		if err := syscall.Fsync(fd); err != nil {
+			log.Printf("Print: [%d] Error syncing: %s\n", s.Id, err)
+			cntErrors.Add(1)
+		}
+		if err := syscall.Close(fd); err != nil {
 			log.Fatalf("Print: [%d] Error closing printer: %s\n", s.Id, err)
 		}
 		t1 := time.Now()
