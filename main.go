@@ -4,11 +4,13 @@ import (
 	"expvar"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 )
 
 const (
@@ -20,15 +22,34 @@ var build = `UNKNOWN` // injected via Makefile
 const (
 	ACCEPTED_METHOD = `POST`
 	MAX_LENGTH      = 1600 // 32*50, plenty
+	BUF_SIZE        = 32   // way too many for buffered messages
+	STAMP_LAYOUT    = `2006-01-02 15:04:05 MST`
 )
 
 var (
 	flagHost    string
 	flagPort    int
-	cntRequests = expvar.NewInt("requests")
-	cntPrints   = expvar.NewInt("prints")
-	cntErrors   = expvar.NewInt("errors")
+	cntRequests = expvar.NewInt("_requests")
+	cntPrints   = expvar.NewInt("_prints")
+	cntErrors   = expvar.NewInt("_errors")
+	chSnippets  = make(chan *Snippet, BUF_SIZE)
 )
+
+type Snippet struct {
+	Id     int64
+	Source string
+	Stamp  time.Time
+	Body   []byte
+}
+
+func (s *Snippet) DebugPrint() {
+	fmt.Printf(`%s
+--------------------------------
+%s
+--------------------------------
+#%d @ %s
+`, s.Stamp.Format(STAMP_LAYOUT), s.Body, s.Id, s.Source)
+}
 
 func init() {
 	flag.Usage = func() {
@@ -50,7 +71,25 @@ func main() {
 		flag.Usage()
 		os.Exit(1)
 	}
+	go runServerPrint()
+	go runServerHTTP()
 	sigwait()
+}
+
+func runServerPrint() {
+	log.Println("Print: Started")
+	for {
+		s := <-chSnippets
+		log.Printf("Print: Snippet [%d] received\n", s.Id)
+		s.DebugPrint()
+	}
+}
+
+func runServerHTTP() {
+	addr := fmt.Sprintf("%s:%d", flagHost, flagPort)
+	http.HandleFunc("/print", handlePrint)
+	log.Println("HTTP: Started at", addr)
+	log.Fatalln(http.ListenAndServe(addr, nil))
 }
 
 func handlePrint(w http.ResponseWriter, req *http.Request) {
@@ -65,17 +104,26 @@ func handlePrint(w http.ResponseWriter, req *http.Request) {
 	}
 	if !((req.ContentLength > 0) && (req.ContentLength <= MAX_LENGTH)) {
 		log.Printf("HTTP: [%d] Length not acceptable\n", rid)
-		cnt.Errors.Add(1)
+		cntErrors.Add(1)
 		http.Error(w, "Length not acceptable", 400)
 		return
 	}
-}
-
-func runServerHTTP() {
-	addr := fmt.Sprintf("%s:%d", *flagHost, *flagPort)
-	http.HandleFunc("/print", handlePrint)
-	log.Println("HTTP: Started at", addr)
-	log.Fatalln(http.ListenAndServe(addr, nil))
+	body, err := ioutil.ReadAll(req.Body)
+	if err != nil {
+		log.Printf("HTTP: [%d] Error reading body: %s\n", rid, err)
+		cntErrors.Add(1)
+		http.Error(w, "Problem reading body", 500)
+		return
+	}
+	snippet := Snippet{
+		Id:     rid,
+		Source: req.RemoteAddr,
+		Stamp:  time.Now(),
+		Body:   body,
+	}
+	chSnippets <- &snippet
+	log.Printf("HTTP: [%d] Handled\n", rid)
+	fmt.Fprintf(w, "Queued as snippet %d\n", rid)
 }
 
 func dieOnErr(msg string, err error) {
@@ -90,7 +138,7 @@ func sigwait() {
 	signal.Notify(sig, syscall.SIGINT, syscall.SIGTERM, syscall.SIGKILL)
 
 	<-sig
-	log.Println("Signal received, stopping")
+	log.Printf("\nSignal received, stopping\n")
 
 	return
 }
