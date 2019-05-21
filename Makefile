@@ -9,3 +9,6 @@ clean:
 
 amd64:
 	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o snippetd-amd64-$(VER) .
+
+rpi1:
+	GOOS=linux GOARCH=arm GOARM=5 go build $(LDFLAGS) -o snippetd-rpi1-$(VER) .
