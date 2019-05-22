@@ -17,7 +17,7 @@ import (
 )
 
 const (
-	VERSION = `0.2.0`
+	VERSION = `0.2.28`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -108,6 +108,7 @@ func main() {
 		fmt.Fprintln(os.Stderr, "Device path doesn't exist")
 		os.Exit(2)
 	}
+	log.Printf("Starting v%s...\n", VERSION)
 	go runServerPrint()
 	go runServerHTTP()
 	sigwait()
