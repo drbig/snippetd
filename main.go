@@ -17,13 +17,14 @@ import (
 )
 
 const (
-	VERSION = `0.2.30`
+	VERSION = `0.3.3`
 )
 
 var build = `UNKNOWN` // injected via Makefile
 
 const (
 	ACCEPTED_METHOD = `POST`
+	KEY_RAW         = `raw`
 	MAX_LENGTH      = 16000 // accept 16 kB, because images
 	BUF_SIZE        = 32    // way too many for buffered messages
 	STAMP_LAYOUT    = `2006-01-02 15:04:05 MST`
@@ -55,6 +56,7 @@ type Snippet struct {
 	Source string
 	Stamp  time.Time
 	Body   []byte
+	Raw    bool
 }
 
 func (s *Snippet) DebugPrint() {
@@ -81,6 +83,10 @@ func (s *Snippet) ESCPrint(w io.Writer) {
 		s.Body,
 		ALIGN_RIGHT, SMALL_START, s.Id, s.Source, SMALL_END,
 		ALIGN_LEFT)
+}
+
+func (s *Snippet) ESCPrintRaw(w io.Writer) {
+	fmt.Fprintf(w, "%s%s\n", RESET_PRINTER, s.Body)
 }
 
 func init() {
@@ -128,7 +134,11 @@ func runServerPrint() {
 		}
 		log.Printf("Print: [%d] Printing...\n", s.Id)
 		outBuf.Reset()
-		s.ESCPrint(outW)
+		if s.Raw {
+			s.ESCPrintRaw(outW)
+		} else {
+			s.ESCPrint(outW)
+		}
 		if _, err := syscall.Write(fd, outBuf.Bytes()); err != nil {
 			log.Printf("Print: [%d] Error writing: %s\n", s.Id, err)
 			cntErrors.Add(1)
@@ -178,6 +188,7 @@ func handlePrint(w http.ResponseWriter, req *http.Request) {
 		Source: req.RemoteAddr[:strings.IndexByte(req.RemoteAddr, ':')],
 		Stamp:  time.Now(),
 		Body:   body,
+		Raw:    req.FormValue(KEY_RAW) != "",
 	}
 	chSnippets <- &snippet
 	t1 := time.Now()
