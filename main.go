@@ -17,15 +17,15 @@ import (
 )
 
 const (
-	VERSION = `0.2.28`
+	VERSION = `0.2.30`
 )
 
 var build = `UNKNOWN` // injected via Makefile
 
 const (
 	ACCEPTED_METHOD = `POST`
-	MAX_LENGTH      = 1600 // 32*50, plenty
-	BUF_SIZE        = 32   // way too many for buffered messages
+	MAX_LENGTH      = 16000 // accept 16 kB, because images
+	BUF_SIZE        = 32    // way too many for buffered messages
 	STAMP_LAYOUT    = `2006-01-02 15:04:05 MST`
 )
 
