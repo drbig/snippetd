@@ -25,8 +25,11 @@ var build = `UNKNOWN` // injected via Makefile
 const (
 	ACCEPTED_METHOD = `POST`
 	KEY_RAW         = `raw`
-	MAX_LENGTH      = 16000 // accept 16 kB, because images
-	BUF_SIZE        = 32    // way too many for buffered messages
+	KEY_IMG         = `img`
+	MAX_TXT_LENGTH  = 1600           // accept 1.6 kB, sane for just text
+	MAX_IMG_LENGTH  = 64000          // accept 64 kB, sane for images
+	MAX_LENGTH      = MAX_IMG_LENGTH // for pre-read check
+	BUF_SIZE        = 32             // way too many for buffered messages
 	STAMP_LAYOUT    = `2006-01-02 15:04:05 MST`
 )
 
@@ -181,6 +184,18 @@ func handlePrint(w http.ResponseWriter, req *http.Request) {
 		log.Printf("HTTP: [%d] Error reading body: %s\n", rid, err)
 		cntErrors.Add(1)
 		http.Error(w, "Problem reading body", 500)
+		return
+	}
+	var maxLength int64
+	if req.FormValue(KEY_IMG) == "" {
+		maxLength = MAX_TXT_LENGTH
+	} else {
+		maxLength = MAX_IMG_LENGTH
+	}
+	if req.ContentLength > maxLength {
+		log.Printf("HTTP: [%d] Length not acceptable for this kind\n", rid)
+		cntErrors.Add(1)
+		http.Error(w, "Length not acceptable for this kind", 400)
 		return
 	}
 	snippet := Snippet{
