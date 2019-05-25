@@ -121,7 +121,7 @@ func main() {
 }
 
 func runServerPrint() {
-	log.Println("Print: Started")
+	log.Println("Print: Started at", devPath)
 	for {
 		s := <-chSnippets
 		t0 := time.Now()
