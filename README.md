@@ -21,7 +21,7 @@ What it **doesn't do**:
 None for now, given nobody will use this anyway :P
 
 But this is a part of a larger project, with the second element being the
-[soup2esc](https://github.com/drbig/soup2esc).
+[soup2escpos](https://github.com/drbig/soup2escpos).
 Been using this tandem for less than a month but so far I'm getting what
 I wanted, duh.
 
