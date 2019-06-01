@@ -1,4 +1,4 @@
-# snippetd
+# snippetd [![Build Status](https://travis-ci.org/drbig/snippetd.svg?branch=master)](https://travis-ci.org/drbig/snippetd)
 
 Snippetd is a micro-service that takes POST requests and schedules them to be
 printed on an ESC/POS-compatible ("receipt") thermal printer.
