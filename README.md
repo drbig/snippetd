@@ -11,13 +11,19 @@ Main things it does:
 - Has `expvar`ed basic statistics
 - In general tries to do the least and be reliable
 
+What it **doesn't do**:
+
+- Cares about security in any manner; Feel free to add a key/TLS/etc.
+- It's not and will never be an "enterprise solution"
+
 ## Showcase
 
 None for now, given nobody will use this anyway :P
 
 But this is a part of a larger project, with the second element being the
-[soup2esc](https://github.com/drbig/soup2esc). Been using this tandem for less
-than a month but so far I'm getting what I wanted, duh.
+[soup2esc](https://github.com/drbig/soup2esc).
+Been using this tandem for less than a month but so far I'm getting what
+I wanted, duh.
 
 ## Contributing
 
