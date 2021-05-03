@@ -12,6 +12,7 @@ test: $(TGTS)
 
 clean:
 	@rm -f bin/*
+	@rm -f ./*-dev
 
 dev:
 	@rm -f ./$(PROJECT)-$@-$(VER)-dev
