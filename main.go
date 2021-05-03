@@ -104,10 +104,11 @@ func (s *Snippet) Archive() {
 	h.Write(s.Body)
 
 	hs := fmt.Sprintf("%x", h.Sum(nil))
-	log.Printf("Got snippet sum: %s (id %d)", hs, s.Id)
+	log.Printf("Archive: [%d] Snippet checksum %s", s.Id, hs)
+
 	datPath := path.Join(flagArchive, fmt.Sprintf("%s.dat", hs))
 	if _, err := os.Stat(datPath); os.IsNotExist(err) {
-		log.Printf("A new snippet, saving data at %s\n", datPath)
+		log.Printf("Archive: [%d] Saving data at %s", s.Id, datPath)
 		datFile, err := os.OpenFile(datPath, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Printf("Archive: [%d] Error creating data file: %s\n", s.Id, err)
@@ -120,8 +121,17 @@ func (s *Snippet) Archive() {
 			cntErrors.Add(1)
 			return
 		}
-		log.Printf("Saved file")
 	}
+
+	csvPath := path.Join(flagArchive, fmt.Sprintf("%s.csv", hs))
+	csvFile, err := os.OpenFile(csvPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("Archive: [%d] Error creating info file: %s\n", s.Id, err)
+		cntErrors.Add(1)
+		return
+	}
+	defer csvFile.Close()
+	fmt.Fprintf(csvFile, "%s,%s,%d\n", s.Stamp.Format(STAMP_LAYOUT), s.Source, s.Id)
 }
 
 func init() {
