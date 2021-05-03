@@ -9,6 +9,7 @@ Main things it does:
 - Does basic length sanity checks, and has text and image modes
 - Queues messages for printing, in case you really want to kill your printer
 - Can also archive snippets with requests metadata (very simple)
+- And with archive now can also reprint (by checksum)
 - Has `expvar`ed basic statistics
 - In general tries to do the least and be reliable
 
