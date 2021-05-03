@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 	"time"
@@ -104,6 +105,23 @@ func (s *Snippet) Archive() {
 
 	hs := fmt.Sprintf("%x", h.Sum(nil))
 	log.Printf("Got snippet sum: %s (id %d)", hs, s.Id)
+	datPath := path.Join(flagArchive, fmt.Sprintf("%s.dat", hs))
+	if _, err := os.Stat(datPath); os.IsNotExist(err) {
+		log.Printf("A new snippet, saving data at %s\n", datPath)
+		datFile, err := os.OpenFile(datPath, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Printf("Archive: [%d] Error creating data file: %s\n", s.Id, err)
+			cntErrors.Add(1)
+			return
+		}
+		defer datFile.Close()
+		if _, err := datFile.Write(s.Body); err != nil {
+			log.Printf("Archive: [%d] Error writing data file: %s\n", s.Id, err)
+			cntErrors.Add(1)
+			return
+		}
+		log.Printf("Saved file")
+	}
 }
 
 func init() {
