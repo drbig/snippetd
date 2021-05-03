@@ -19,20 +19,22 @@ import (
 )
 
 const (
-	VERSION = `0.6.0`
+	VERSION = `0.7.0`
 )
 
 var build = `UNKNOWN` // injected via Makefile
 
 const (
-	ACCEPTED_METHOD = `POST`
-	KEY_RAW         = `raw`
-	KEY_IMG         = `img`
-	MAX_TXT_LENGTH  = 1600           // accept 1.6 kB, sane for just text
-	MAX_IMG_LENGTH  = 64000          // accept 64 kB, sane for images
-	MAX_LENGTH      = MAX_IMG_LENGTH // for pre-read check
-	BUF_SIZE        = 32             // way too many for buffered messages
-	STAMP_LAYOUT    = `2006-01-02 15:04:05 MST`
+	PRINT_ACCEPTED_METHOD   = `POST`
+	REPRINT_ACCEPTED_METHOD = `GET`
+	KEY_CHKSUM              = `chksum`
+	KEY_RAW                 = `raw`
+	KEY_IMG                 = `img`
+	MAX_TXT_LENGTH          = 1600           // accept 1.6 kB, sane for just text
+	MAX_IMG_LENGTH          = 64000          // accept 64 kB, sane for images
+	MAX_LENGTH              = MAX_IMG_LENGTH // for pre-read check
+	BUF_SIZE                = 32             // way too many for buffered messages
+	STAMP_LAYOUT            = `2006-01-02 15:04:05 MST`
 )
 
 const (
@@ -205,6 +207,7 @@ func runServerPrint() {
 func runServerHTTP() {
 	addr := fmt.Sprintf("%s:%d", flagHost, flagPort)
 	http.HandleFunc("/print", handlePrint)
+	http.HandleFunc("/reprint", handleReprint)
 	log.Println("HTTP: Started at", addr)
 	log.Fatalln(http.ListenAndServe(addr, nil))
 }
@@ -214,7 +217,7 @@ func handlePrint(w http.ResponseWriter, req *http.Request) {
 	cntRequests.Add(1)
 	rid := cntRequests.Value()
 	log.Printf("HTTP: Print request [%d] %s @ %s %d\n", rid, req.Method, req.RemoteAddr, req.ContentLength)
-	if req.Method != ACCEPTED_METHOD {
+	if req.Method != PRINT_ACCEPTED_METHOD {
 		log.Printf("HTTP: [%d] Wrong method\n", rid)
 		cntErrors.Add(1)
 		http.Error(w, "Method not supported", 400)
@@ -251,6 +254,63 @@ func handlePrint(w http.ResponseWriter, req *http.Request) {
 		Stamp:  time.Now(),
 		Body:   body,
 		Raw:    req.FormValue(KEY_RAW) != "",
+	}
+	chSnippets <- &snippet
+	t1 := time.Now()
+	log.Printf("HTTP: [%d] Finished in %v\n", rid, t1.Sub(t0))
+	fmt.Fprintf(w, "Queued as snippet %d\n", rid)
+}
+
+func handleReprint(w http.ResponseWriter, req *http.Request) {
+	t0 := time.Now()
+	cntRequests.Add(1)
+	rid := cntRequests.Value()
+	log.Printf("HTTP: Re-Print request [%d] %s @ %s\n", rid, req.Method, req.RemoteAddr)
+	if req.Method != REPRINT_ACCEPTED_METHOD {
+		log.Printf("HTTP: [%d] Wrong method\n", rid)
+		cntErrors.Add(1)
+		http.Error(w, "Method not supported", 400)
+		return
+	}
+	if flagArchive == "" {
+		http.Error(w, "Not implemented", 501)
+		return
+	}
+	chksum := req.FormValue(KEY_CHKSUM)
+	if chksum == "" {
+		log.Printf("HTTP: [%d] No snippet checksum provided\n", rid)
+		cntErrors.Add(1)
+		http.Error(w, "No snippet checksum provided", 400)
+		return
+	}
+	binPath := path.Join(flagArchive, fmt.Sprintf("%s.bin", chksum))
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		log.Printf("HTTP: [%d] No snippet with checksum: %s\n", rid, chksum)
+		cntErrors.Add(1)
+		http.Error(w, "No such snippet", 404)
+		return
+	}
+	log.Printf("HTTP: [%d] Loading data from %s", rid, binPath)
+	binFile, err := os.Open(binPath)
+	if err != nil {
+		log.Printf("HTTP: [%d] Error opening data file: %s\n", rid, err)
+		cntErrors.Add(1)
+		return
+	}
+	defer binFile.Close()
+	body, err := ioutil.ReadAll(binFile)
+	if err != nil {
+		log.Printf("HTTP: [%d] Error reading data file: %s\n", rid, err)
+		cntErrors.Add(1)
+		http.Error(w, "Problem reading body", 500)
+		return
+	}
+	snippet := Snippet{
+		Id:     rid,
+		Source: req.RemoteAddr[:strings.IndexByte(req.RemoteAddr, ':')],
+		Stamp:  time.Now(),
+		Body:   body,
+		Raw:    true, // NOTE: Unsure?
 	}
 	chSnippets <- &snippet
 	t1 := time.Now()
