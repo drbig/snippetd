@@ -8,6 +8,7 @@ Main things it does:
 - Wraps each snippet in a nice header and footer (can be turned off per req.)
 - Does basic length sanity checks, and has text and image modes
 - Queues messages for printing, in case you really want to kill your printer
+- Can also archive snippets with requests metadata (very simple)
 - Has `expvar`ed basic statistics
 - In general tries to do the least and be reliable
 
@@ -42,4 +43,4 @@ Standard two-clause BSD license, see LICENSE.txt for details.
 
 Any contributions will be licensed under the same conditions.
 
-Copyright (c) 2019 Piotr S. Staszewski
+Copyright (c) 2019 - 2021 Piotr S. Staszewski
