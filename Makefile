@@ -14,10 +14,10 @@ clean:
 	@rm -f bin/*
 
 amd64:
-	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(PROJECT)-$@-$(VER) .
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(PROJECT)-$@-$(VER) main.go
 
 rpi1:
-	GOOS=linux GOARCH=arm GOARM=5 go build $(LDFLAGS) -o bin/$(PROJECT)-$@-$(VER) .
+	GOOS=linux GOARCH=arm GOARM=5 go build $(LDFLAGS) -o bin/$(PROJECT)-$@-$(VER) main.go
 
 bin/checksums.md5:
 	cd bin && md5sum * > checksums.md5
