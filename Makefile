@@ -4,7 +4,7 @@ VER     := $(shell grep -Eo 'VERSION = `(.*)`' main.go | cut -d'`' -f2)
 BUILD   := $(shell echo `whoami`@`hostname -s` on `date`)
 LDFLAGS := -ldflags='-X "main.build=$(BUILD)"'
 
-.PHONY: clean all test
+.PHONY: clean all test dev
 
 all: $(TGTS) bin/checksums.md5
 
@@ -14,6 +14,7 @@ clean:
 	@rm -f bin/*
 
 dev:
+	@rm -f ./$(PROJECT)-$@-$(VER)-dev
 	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o ./$(PROJECT)-$@-$(VER)-dev main.go
 
 amd64:
