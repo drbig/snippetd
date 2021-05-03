@@ -13,6 +13,9 @@ test: $(TGTS)
 clean:
 	@rm -f bin/*
 
+dev:
+	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o ./$(PROJECT)-$@-$(VER)-dev main.go
+
 amd64:
 	GOOS=linux GOARCH=amd64 go build $(LDFLAGS) -o bin/$(PROJECT)-$@-$(VER) main.go
 
