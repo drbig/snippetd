@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"crypto/md5"
 	"expvar"
 	"flag"
 	"fmt"
@@ -11,13 +12,14 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path"
 	"strings"
 	"syscall"
 	"time"
 )
 
 const (
-	VERSION = `0.5.0`
+	VERSION = `0.6.0`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -45,6 +47,7 @@ const (
 var (
 	flagHost    string
 	flagPort    int
+	flagArchive string
 	devPath     string
 	cntRequests = expvar.NewInt("_requests")
 	cntPrints   = expvar.NewInt("_prints")
@@ -92,6 +95,45 @@ func (s *Snippet) ESCPrintRaw(w io.Writer) {
 	fmt.Fprintf(w, "%s%s\n", RESET_PRINTER, s.Body)
 }
 
+func (s *Snippet) Archive() {
+	if flagArchive == "" {
+		return
+	}
+
+	h := md5.New()
+	h.Write(s.Body)
+
+	hs := fmt.Sprintf("%x", h.Sum(nil))
+	log.Printf("Archive: [%d] Snippet checksum %s", s.Id, hs)
+
+	binPath := path.Join(flagArchive, fmt.Sprintf("%s.bin", hs))
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		log.Printf("Archive: [%d] Saving data at %s", s.Id, binPath)
+		binFile, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, 0644)
+		if err != nil {
+			log.Printf("Archive: [%d] Error creating data file: %s\n", s.Id, err)
+			cntErrors.Add(1)
+			return
+		}
+		defer binFile.Close()
+		if _, err := binFile.Write(s.Body); err != nil {
+			log.Printf("Archive: [%d] Error writing data file: %s\n", s.Id, err)
+			cntErrors.Add(1)
+			return
+		}
+	}
+
+	csvPath := path.Join(flagArchive, fmt.Sprintf("%s.csv", hs))
+	csvFile, err := os.OpenFile(csvPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
+	if err != nil {
+		log.Printf("Archive: [%d] Error creating info file: %s\n", s.Id, err)
+		cntErrors.Add(1)
+		return
+	}
+	defer csvFile.Close()
+	fmt.Fprintf(csvFile, "%s,%s,%d\n", s.Stamp.Format(STAMP_LAYOUT), s.Source, s.Id)
+}
+
 func init() {
 	flag.Usage = func() {
 		fmt.Fprintf(os.Stderr, `Usage: %s (options...) <device_path>
@@ -104,6 +146,7 @@ Options:
 	}
 	flag.StringVar(&flagHost, "h", "127.0.0.1", "address to bind the HTTP server to")
 	flag.IntVar(&flagPort, "p", 9999, "port to bind the HTTP server to")
+	flag.StringVar(&flagArchive, "a", "", "path for snippet archive store")
 }
 
 func main() {
@@ -118,6 +161,9 @@ func main() {
 		os.Exit(2)
 	}
 	log.Printf("Starting v%s...\n", VERSION)
+	if flagArchive != "" {
+		log.Printf("Will use snippet archive at %s\n", flagArchive)
+	}
 	go runServerPrint()
 	go runServerHTTP()
 	sigwait()
@@ -152,6 +198,7 @@ func runServerPrint() {
 		t1 := time.Now()
 		log.Printf("Print: [%d] Finished in %v\n", s.Id, t1.Sub(t0))
 		cntPrints.Add(1)
+		s.Archive()
 	}
 }
 
