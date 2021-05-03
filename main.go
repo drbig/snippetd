@@ -106,17 +106,17 @@ func (s *Snippet) Archive() {
 	hs := fmt.Sprintf("%x", h.Sum(nil))
 	log.Printf("Archive: [%d] Snippet checksum %s", s.Id, hs)
 
-	datPath := path.Join(flagArchive, fmt.Sprintf("%s.dat", hs))
-	if _, err := os.Stat(datPath); os.IsNotExist(err) {
-		log.Printf("Archive: [%d] Saving data at %s", s.Id, datPath)
-		datFile, err := os.OpenFile(datPath, os.O_CREATE|os.O_WRONLY, 0644)
+	binPath := path.Join(flagArchive, fmt.Sprintf("%s.bin", hs))
+	if _, err := os.Stat(binPath); os.IsNotExist(err) {
+		log.Printf("Archive: [%d] Saving data at %s", s.Id, binPath)
+		binFile, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Printf("Archive: [%d] Error creating data file: %s\n", s.Id, err)
 			cntErrors.Add(1)
 			return
 		}
-		defer datFile.Close()
-		if _, err := datFile.Write(s.Body); err != nil {
+		defer binFile.Close()
+		if _, err := binFile.Write(s.Body); err != nil {
 			log.Printf("Archive: [%d] Error writing data file: %s\n", s.Id, err)
 			cntErrors.Add(1)
 			return
