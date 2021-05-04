@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	VERSION = `0.7.3`
+	VERSION = `0.8.0`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -27,6 +27,8 @@ var build = `UNKNOWN` // injected via Makefile
 const (
 	PRINT_ACCEPTED_METHOD   = `POST`
 	REPRINT_ACCEPTED_METHOD = `GET`
+	FILE_EXT_RAW            = `bin`
+	FILE_EXT_TXT            = `txt`
 	KEY_CHKSUM              = `chksum`
 	KEY_RAW                 = `raw`
 	KEY_IMG                 = `img`
@@ -109,24 +111,26 @@ func (s *Snippet) Archive() {
 	hs := fmt.Sprintf("%x", h.Sum(nil))
 	log.Printf("Archive: [%d] Snippet checksum %s", s.Id, hs)
 
-	binPath := path.Join(flagArchive, fmt.Sprintf("%s.bin", hs))
-	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		log.Printf("Archive: [%d] Saving data at %s", s.Id, binPath)
-		binFile, err := os.OpenFile(binPath, os.O_CREATE|os.O_WRONLY, 0644)
+	ext := FILE_EXT_TXT
+	if s.Raw {
+		ext = FILE_EXT_RAW
+	}
+	outPath := path.Join(flagArchive, fmt.Sprintf("%s.%s", hs, ext))
+	if _, err := os.Stat(outPath); os.IsNotExist(err) {
+		log.Printf("Archive: [%d] Saving data at %s", s.Id, outPath)
+		outFile, err := os.OpenFile(outPath, os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			log.Printf("Archive: [%d] Error creating data file: %s\n", s.Id, err)
 			cntErrors.Add(1)
 			return
 		}
-		defer binFile.Close()
-		if s.Raw {
-			s.ESCPrintRaw(binFile)
-		} else {
-			s.ESCPrint(binFile)
-		}
+		defer outFile.Close()
+		outFile.Write(s.Body)
 	}
 
 	csvPath := path.Join(flagArchive, fmt.Sprintf("%s.csv", hs))
+	_, err := os.Stat(csvPath)
+	isFreshCSV := os.IsNotExist(err)
 	csvFile, err := os.OpenFile(csvPath, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("Archive: [%d] Error creating info file: %s\n", s.Id, err)
@@ -134,7 +138,10 @@ func (s *Snippet) Archive() {
 		return
 	}
 	defer csvFile.Close()
-	fmt.Fprintf(csvFile, "%s,%s,%d\n", s.Stamp.Format(STAMP_LAYOUT), s.Source, s.Id)
+	if isFreshCSV {
+		fmt.Fprintln(csvFile, "timestamp,source_ip,req_id,is_raw,is_reprint")
+	}
+	fmt.Fprintf(csvFile, "%s,%s,%d,%v,%v\n", s.Stamp.Format(STAMP_LAYOUT), s.Source, s.Id, s.Raw, s.Reprint)
 }
 
 func init() {
@@ -186,18 +193,10 @@ func runServerPrint() {
 		}
 		log.Printf("Print: [%d] Printing...\n", s.Id)
 		outBuf.Reset()
-		if s.Reprint {
-			if _, err := outBuf.Write(s.Body); err != nil {
-				log.Printf("Print: [%d] Error copying to buffer: %s\n", s.Id, err)
-				cntErrors.Add(1)
-				return
-			}
+		if s.Raw {
+			s.ESCPrintRaw(outW)
 		} else {
-			if s.Raw {
-				s.ESCPrintRaw(outW)
-			} else {
-				s.ESCPrint(outW)
-			}
+			s.ESCPrint(outW)
 		}
 		if _, err := syscall.Write(fd, outBuf.Bytes()); err != nil {
 			log.Printf("Print: [%d] Error writing: %s\n", s.Id, err)
@@ -209,9 +208,7 @@ func runServerPrint() {
 		t1 := time.Now()
 		log.Printf("Print: [%d] Finished in %v\n", s.Id, t1.Sub(t0))
 		cntPrints.Add(1)
-		if !s.Reprint {
-			s.Archive()
-		}
+		s.Archive()
 	}
 }
 
@@ -294,22 +291,27 @@ func handleReprint(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "No snippet checksum provided", 400)
 		return
 	}
-	binPath := path.Join(flagArchive, fmt.Sprintf("%s.bin", chksum))
-	if _, err := os.Stat(binPath); os.IsNotExist(err) {
-		log.Printf("HTTP: [%d] No snippet with checksum: %s\n", rid, chksum)
-		cntErrors.Add(1)
-		http.Error(w, "No such snippet", 404)
-		return
+	dataPath := path.Join(flagArchive, fmt.Sprintf("%s.%s", chksum, FILE_EXT_TXT))
+	isRaw := false
+	if _, err := os.Stat(dataPath); os.IsNotExist(err) {
+		dataPath = path.Join(flagArchive, fmt.Sprintf("%s.%s", chksum, FILE_EXT_RAW))
+		if _, err := os.Stat(dataPath); os.IsNotExist(err) {
+			log.Printf("HTTP: [%d] No snippet with checksum: %s\n", rid, chksum)
+			cntErrors.Add(1)
+			http.Error(w, "No such snippet", 404)
+			return
+		}
+		isRaw = true
 	}
-	log.Printf("HTTP: [%d] Loading data from %s", rid, binPath)
-	binFile, err := os.Open(binPath)
+	log.Printf("HTTP: [%d] Loading data from %s", rid, dataPath)
+	dataFile, err := os.Open(dataPath)
 	if err != nil {
 		log.Printf("HTTP: [%d] Error opening data file: %s\n", rid, err)
 		cntErrors.Add(1)
 		return
 	}
-	defer binFile.Close()
-	body, err := ioutil.ReadAll(binFile)
+	defer dataFile.Close()
+	body, err := ioutil.ReadAll(dataFile)
 	if err != nil {
 		log.Printf("HTTP: [%d] Error reading data file: %s\n", rid, err)
 		cntErrors.Add(1)
@@ -321,6 +323,7 @@ func handleReprint(w http.ResponseWriter, req *http.Request) {
 		Source:  req.RemoteAddr[:strings.IndexByte(req.RemoteAddr, ':')],
 		Stamp:   time.Now(),
 		Body:    body,
+		Raw:     isRaw,
 		Reprint: true,
 	}
 	chSnippets <- &snippet
