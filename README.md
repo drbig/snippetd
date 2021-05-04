@@ -3,12 +3,14 @@
 Snippetd is a micro-service that takes POST requests and schedules them to be
 printed on an ESC/POS-compatible ("receipt") thermal printer.
 
+**Current version**: `0.8.0`
+
 Main things it does:
 
 - Wraps each snippet in a nice header and footer (can be turned off per req.)
 - Does basic length sanity checks, and has text and image modes
 - Queues messages for printing, in case you really want to kill your printer
-- Can also archive snippets with requests metadata (very simple)
+- Can also archive snippets with requests metadata
 - And with archive now can also reprint (by checksum)
 - Has `expvar`ed basic statistics
 - In general tries to do the least and be reliable
