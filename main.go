@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	VERSION = `0.7.0`
+	VERSION = `0.7.3`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -60,11 +60,12 @@ var (
 )
 
 type Snippet struct {
-	Id     int64
-	Source string
-	Stamp  time.Time
-	Body   []byte
-	Raw    bool
+	Id      int64
+	Source  string
+	Stamp   time.Time
+	Body    []byte
+	Raw     bool
+	Reprint bool
 }
 
 func (s *Snippet) DebugPrint() {
@@ -118,10 +119,10 @@ func (s *Snippet) Archive() {
 			return
 		}
 		defer binFile.Close()
-		if _, err := binFile.Write(s.Body); err != nil {
-			log.Printf("Archive: [%d] Error writing data file: %s\n", s.Id, err)
-			cntErrors.Add(1)
-			return
+		if s.Raw {
+			s.ESCPrintRaw(binFile)
+		} else {
+			s.ESCPrint(binFile)
 		}
 	}
 
@@ -185,10 +186,18 @@ func runServerPrint() {
 		}
 		log.Printf("Print: [%d] Printing...\n", s.Id)
 		outBuf.Reset()
-		if s.Raw {
-			s.ESCPrintRaw(outW)
+		if s.Reprint {
+			if _, err := outBuf.Write(s.Body); err != nil {
+				log.Printf("Print: [%d] Error copying to buffer: %s\n", s.Id, err)
+				cntErrors.Add(1)
+				return
+			}
 		} else {
-			s.ESCPrint(outW)
+			if s.Raw {
+				s.ESCPrintRaw(outW)
+			} else {
+				s.ESCPrint(outW)
+			}
 		}
 		if _, err := syscall.Write(fd, outBuf.Bytes()); err != nil {
 			log.Printf("Print: [%d] Error writing: %s\n", s.Id, err)
@@ -200,7 +209,9 @@ func runServerPrint() {
 		t1 := time.Now()
 		log.Printf("Print: [%d] Finished in %v\n", s.Id, t1.Sub(t0))
 		cntPrints.Add(1)
-		s.Archive()
+		if !s.Reprint {
+			s.Archive()
+		}
 	}
 }
 
@@ -306,11 +317,11 @@ func handleReprint(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	snippet := Snippet{
-		Id:     rid,
-		Source: req.RemoteAddr[:strings.IndexByte(req.RemoteAddr, ':')],
-		Stamp:  time.Now(),
-		Body:   body,
-		Raw:    true, // NOTE: Unsure?
+		Id:      rid,
+		Source:  req.RemoteAddr[:strings.IndexByte(req.RemoteAddr, ':')],
+		Stamp:   time.Now(),
+		Body:    body,
+		Reprint: true,
 	}
 	chSnippets <- &snippet
 	t1 := time.Now()
