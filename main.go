@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	VERSION = `0.8.0`
+	VERSION = `0.9.0`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -46,6 +46,8 @@ const (
 	ALIGN_LEFT    = "\x1b\x61\x00"
 	ALIGN_RIGHT   = "\x1b\x61\x02"
 	RESET_PRINTER = "\x1b\x40"
+	CUT_FULL      = "\x1d\x56\x00"
+	CUT_PARTIAL   = "\x1d\x56\x01"
 )
 
 var (
@@ -72,28 +74,29 @@ type Snippet struct {
 
 func (s *Snippet) DebugPrint() {
 	fmt.Printf(`%s
---------------------------------
+----------------------------------
 %s
---------------------------------
+----------------------------------
 #%d @ %s
 `, s.Stamp.Format(STAMP_LAYOUT), s.Body, s.Id, s.Source)
 }
 
 func (s *Snippet) ESCPrint(w io.Writer) {
 	fmt.Fprintf(w, `%s%s%s%s%s
-%s--------------------------------
+%s----------------------------------
 %s
---------------------------------
-%s%s#%d @ %s%s
-%s
+----------------------------------
+%s%s#%d @ %s%s%s
 
 
-`,
+
+
+%s`,
 		RESET_PRINTER, ALIGN_CENTER, SMALL_START, s.Stamp.Format(STAMP_LAYOUT), SMALL_END,
 		ALIGN_LEFT,
 		s.Body,
-		ALIGN_RIGHT, SMALL_START, s.Id, s.Source, SMALL_END,
-		ALIGN_LEFT)
+		ALIGN_RIGHT, SMALL_START, s.Id, s.Source, SMALL_END, ALIGN_LEFT,
+		CUT_FULL)
 }
 
 func (s *Snippet) ESCPrintRaw(w io.Writer) {
