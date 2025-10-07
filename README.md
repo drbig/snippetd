@@ -3,7 +3,14 @@
 Snippetd is a micro-service that takes POST requests and schedules them to be
 printed on an ESC/POS-compatible ("receipt") thermal printer.
 
-**Current version**: `0.8.0`
+**Current version**: `0.9.0`
+
+**WARNING**
+
+Version `0.9.0` has templates for 34 char printing, that is the
+"high dot density" that can be enabled on some (better?) printers. It also
+adds support for and uses the cutter. If your printer is 32 chars only better
+use the previous version (`0.8.0`).
 
 Main things it does:
 
@@ -46,4 +53,4 @@ Standard two-clause BSD license, see LICENSE.txt for details.
 
 Any contributions will be licensed under the same conditions.
 
-Copyright (c) 2019 - 2021 Piotr S. Staszewski
+Copyright (c) 2019 - 2025 Piotr S. Staszewski
