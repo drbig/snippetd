@@ -19,7 +19,7 @@ import (
 )
 
 const (
-	VERSION = `0.9.0`
+	VERSION = `0.9.1`
 )
 
 var build = `UNKNOWN` // injected via Makefile
@@ -32,7 +32,7 @@ const (
 	KEY_CHKSUM              = `chksum`
 	KEY_RAW                 = `raw`
 	KEY_IMG                 = `img`
-	MAX_TXT_LENGTH          = 1600           // accept 1.6 kB, sane for just text
+	MAX_TXT_LENGTH          = 3200           // accept 3.2 kB, sane for just text
 	MAX_IMG_LENGTH          = 64000          // accept 64 kB, sane for images
 	MAX_LENGTH              = MAX_IMG_LENGTH // for pre-read check
 	BUF_SIZE                = 32             // way too many for buffered messages
